@@ -50,7 +50,7 @@ RemotePushDialog::RemotePushDialog(QWidget* parent, const QString& host, const Q
             ui->comboLicence->addItem(QString::fromStdString(it->second.second), QString::fromStdString(it->second.first));
     });
 
-    // Fetch list of exsisting branches
+    // Fetch list of existing branches
     QUrl url(m_host + "branch/list");
     QUrlQuery query;
     query.addQueryItem("username", RemoteNetwork::get().getInfoFromClientCert(m_clientCert, RemoteNetwork::CertInfoUser));
@@ -152,4 +152,40 @@ QString RemotePushDialog::branch() const
 bool RemotePushDialog::forcePush() const
 {
     return ui->checkForce->isChecked();
+}
+
+void RemotePushDialog::reloadBranchList(const QString& branch)
+{
+    QUrl url(m_host + "branch/list");
+    QUrlQuery query;
+    query.addQueryItem("username", RemoteNetwork::get().getInfoFromClientCert(m_clientCert, RemoteNetwork::CertInfoUser));
+    query.addQueryItem("folder", "/");
+    query.addQueryItem("dbname", ui->editName->text());
+    url.setQuery(query);
+    RemoteNetwork::get().fetch(url.toString(), RemoteNetwork::RequestTypeCustom, m_clientCert, [this, branch](const QByteArray& reply) {
+        // Read and check results
+        json obj = json::parse(reply, nullptr, false);
+        if(obj.is_discarded() || !obj.is_object())
+            return;
+        json obj_branches = obj["branches"];
+
+        // Get default branch
+        std::string default_branch = (obj.contains("default_branch") && !obj["default_branch"].empty()) ? obj["default_branch"] : "master";
+
+        // Clear branch list and add the default branch
+        ui->comboBranch->clear();
+        ui->comboBranch->addItem(QString::fromStdString(default_branch));
+
+        // Parse data and assemble branch list
+        std::vector<std::string> branches;
+        for(auto it=obj_branches.cbegin();it!=obj_branches.cend();++it)
+        {
+            if(it.key() != default_branch)
+                ui->comboBranch->addItem(QString::fromStdString(it.key()));
+        }
+
+        // If a branch was suggested, select it now
+        if(!branch.isEmpty())
+            ui->comboBranch->setCurrentIndex(ui->comboBranch->findText(branch));
+    });
 }
