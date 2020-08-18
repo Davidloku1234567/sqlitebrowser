@@ -5,7 +5,6 @@ TableBrowserDock::TableBrowserDock(QWidget* parent, MainWindow* mainWindow)
     : QDockWidget(parent),
       main_window(mainWindow)
 {
-    setFocusPolicy(Qt::ClickFocus);
 }
 
 void TableBrowserDock::closeEvent(QCloseEvent*)
