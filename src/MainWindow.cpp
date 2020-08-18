@@ -3635,7 +3635,10 @@ void MainWindow::changeTableBrowserTab(TableBrowser* browser)
     currentTableBrowserDock = browser;
 
     if(browser && browser->model() != m_currentTabTableModel)
+    {
         m_currentTabTableModel = browser->model();
+        plotDock->updatePlot(m_currentTabTableModel, &browser->settings(browser->currentlyBrowsedTableName()), true, false);
+    }
 }
 
 void MainWindow::renameTableBrowserTab(TableBrowserDock* dock)
