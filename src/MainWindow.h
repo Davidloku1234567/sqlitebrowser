@@ -152,7 +152,7 @@ private slots:
     void changeTreeSelection();
     void fileNew();
     void fileNewInMemoryDatabase();
-    void populateTable(bool force_refresh = false);
+    void refreshTableBrowsers(bool force_refresh = false);
     bool fileClose();
     void createTable();
     void createIndex();

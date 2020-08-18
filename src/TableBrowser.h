@@ -76,7 +76,7 @@ public:
 
 public slots:
     void setEnabled(bool enable);
-    void updateTable();
+    void refresh();
     void clearFilters();
     void reloadSettings();
     void setCurrentTable(const sqlb::ObjectIdentifier& name);

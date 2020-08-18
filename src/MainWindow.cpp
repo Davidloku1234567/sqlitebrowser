@@ -541,7 +541,7 @@ bool MainWindow::fileOpen(const QString& fileName, bool openFromProject, bool re
                 else if(ui->mainTab->currentWidget() == ui->pragmas)
                     loadPragmas();
 
-                populateTable(true);
+                refreshTableBrowsers(true);
 
                 // Update remote dock
                 remoteDock->fileOpened(wFile);
@@ -574,7 +574,7 @@ void MainWindow::fileNew()
         statusEncodingLabel->setText(db.getPragma("encoding"));
         statusEncryptionLabel->setVisible(false);
         statusReadOnlyLabel->setVisible(false);
-        populateTable();
+        refreshTableBrowsers();
         if(ui->tabSqlAreas->count() == 0)
             openSqlTab(true);
         createTable();
@@ -592,7 +592,7 @@ void MainWindow::fileNewInMemoryDatabase()
     statusEncryptionLabel->setVisible(false);
     statusReadOnlyLabel->setVisible(false);
     remoteDock->fileOpened(":memory:");
-    populateTable();
+    refreshTableBrowsers();
     if(ui->tabSqlAreas->count() == 0)
         openSqlTab(true);
     createTable();
@@ -651,7 +651,7 @@ void MainWindow::populateStructure(const std::vector<sqlb::ObjectIdentifier>& ol
 
 }
 
-void MainWindow::populateTable(bool force_refresh)
+void MainWindow::refreshTableBrowsers(bool force_refresh)
 {
     QApplication::setOverrideCursor(Qt::WaitCursor);
     for(const auto& d : allTableBrowserDocks())
@@ -662,7 +662,7 @@ void MainWindow::populateTable(bool force_refresh)
         {
             TableBrowser* t = qobject_cast<TableBrowser*>(d->widget());
             if(t)
-                t->updateTable();
+                t->refresh();
         }
     }
     QApplication::restoreOverrideCursor();
@@ -804,7 +804,7 @@ void MainWindow::refresh()
         db.updateSchema();
     } else if (currentTab == ui->browser) {
         // Refresh the schema and reload the current table
-        populateTable();
+        refreshTableBrowsers();
     } else if (currentTab == ui->pragmas) {
         // Reload pragma values
         loadPragmas();
@@ -819,7 +819,7 @@ void MainWindow::createTable()
     EditTableDialog dialog(db, sqlb::ObjectIdentifier(), true, this);
     if(dialog.exec())
     {
-        populateTable();
+        refreshTableBrowsers();
     }
 }
 
@@ -827,7 +827,7 @@ void MainWindow::createIndex()
 {
     EditIndexDialog dialog(db, sqlb::ObjectIdentifier(), true, this);
     if(dialog.exec())
-        populateTable();
+        refreshTableBrowsers();
 }
 
 void MainWindow::compact()
@@ -874,7 +874,7 @@ void MainWindow::deleteObject()
             QString error = tr("Message from database engine:\n%1").arg(db.lastError());
             QMessageBox::warning(this, QApplication::applicationName(), message + " " + error);
         } else {
-            populateTable();
+            refreshTableBrowsers();
             changeTreeSelection();
         }
     }
@@ -937,12 +937,12 @@ void MainWindow::editObject()
                 if(t->currentlyBrowsedTableName() == name)
                     t->clearFilters();
             }
-            populateTable();
+            refreshTableBrowsers();
         }
     } else if(type == "index") {
         EditIndexDialog dialog(db, name, false, this);
         if(dialog.exec())
-            populateTable();
+            refreshTableBrowsers();
     } else if(type == "view") {
         sqlb::ViewPtr view = db.getObjectByName<sqlb::View>(name);
         runSqlNewTab(QString("DROP VIEW %1;\n%2").arg(QString::fromStdString(name.toString())).arg(QString::fromStdString(view->sql())),
@@ -1284,7 +1284,7 @@ void MainWindow::mainTabSelected(int /*tabindex*/)
 
     if(ui->mainTab->currentWidget() == ui->browser)
     {
-        populateTable();
+        refreshTableBrowsers();
     } else if(ui->mainTab->currentWidget() == ui->pragmas) {
         loadPragmas();
     } else if(ui->mainTab->currentWidget() == ui->query) {
@@ -1324,7 +1324,7 @@ void MainWindow::importTableFromCSV()
     {
         ImportCsvDialog dialog(validFiles, &db, this);
         if (dialog.exec())
-            populateTable();
+            refreshTableBrowsers();
     }
 }
 
@@ -1398,7 +1398,7 @@ void MainWindow::fileRevert()
         if(QMessageBox::question(this, QApplication::applicationName(), msg, QMessageBox::Yes | QMessageBox::Default, QMessageBox::No | QMessageBox::Escape) == QMessageBox::Yes)
         {
             db.revertAll();
-            populateTable();
+            refreshTableBrowsers();
         }
     }
 }
@@ -1486,7 +1486,7 @@ void MainWindow::importDatabaseFromSQL()
 
     // Refresh views
     db.updateSchema();
-    populateTable();
+    refreshTableBrowsers();
 }
 
 void MainWindow::openPreferences()
@@ -1742,7 +1742,7 @@ void MainWindow::dropEvent(QDropEvent *event)
                 }
                 ImportCsvDialog dialog(validFiles, &db, this);
                 if (dialog.exec())
-                    populateTable();
+                    refreshTableBrowsers();
             }
         }
     }
@@ -2223,7 +2223,7 @@ void MainWindow::reloadSettings()
     // Refresh view
     dbStructureModel->reloadData();
     populateStructure();
-    populateTable();
+    refreshTableBrowsers();
 
     // Hide or show the remote dock as needed
     bool showRemoteActions = Settings::getValue("remote", "active").toBool();
@@ -2736,7 +2736,7 @@ bool MainWindow::loadProject(QString filename, bool readOnly)
         file.close();
 
         if(ui->mainTab->currentWidget() == ui->browser) {
-            populateTable();     // Refresh view
+            refreshTableBrowsers();     // Refresh view
         }
 
         isProjectModified = false;
@@ -3621,7 +3621,7 @@ TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& t
     m_currentTabTableModel = w->model();
 
     // Update view
-    w->updateTable();
+    w->refresh();
 
     // Set up dock and add it to the tab
     d->setWidget(w);

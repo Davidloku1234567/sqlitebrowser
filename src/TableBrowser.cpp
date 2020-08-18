@@ -90,7 +90,7 @@ TableBrowser::TableBrowser(DBBrowserDB* _db, QWidget* parent) :
                 index = num_items - 1;
         }
         ui->comboBrowseTable->setCurrentIndex(index);
-        updateTable();
+        refresh();
     });
 
     // This is a workaround needed for QDarkStyleSheet.
@@ -145,7 +145,7 @@ TableBrowser::TableBrowser(DBBrowserDB* _db, QWidget* parent) :
 
     connect(ui->actionRefresh, &QAction::triggered, this, [this]() {
         db->updateSchema();
-        updateTable();
+        refresh();
     });
 
     connect(ui->fontComboBox, &QFontComboBox::currentFontChanged, this, [this](const QFont &font) {
@@ -425,7 +425,7 @@ void TableBrowser::setEnabled(bool enable)
     updateInsertDeleteRecordButton();
 }
 
-void TableBrowser::updateTable()
+void TableBrowser::refresh()
 {
     // If the list of table names is empty, i.e. there are no tables to browse, clear the view
     // to make sure any left over data is removed and do not add any new information.
@@ -1208,7 +1208,7 @@ void TableBrowser::showRecordPopupMenu(const QPoint& pos)
 
     connect(adjustRowHeightAction, &QAction::toggled, [&](bool checked) {
         m_adjustRows = checked;
-        updateTable();
+        refresh();
     });
 
     popupRecordMenu.exec(ui->dataTable->verticalHeader()->mapToGlobal(pos));
@@ -1235,7 +1235,7 @@ void TableBrowser::insertValues()
     std::vector<std::string> pseudo_pk = m_model->hasPseudoPk() ? m_model->pseudoPk() : std::vector<std::string>();
     AddRecordDialog dialog(*db, currentlyBrowsedTableName(), this, pseudo_pk);
     if (dialog.exec())
-        updateTable();
+        refresh();
 }
 
 void TableBrowser::deleteRecord()
@@ -1355,7 +1355,7 @@ void TableBrowser::editDisplayFormat()
         emit projectModified();
 
         // Refresh view
-        updateTable();
+        refresh();
     }
 }
 
@@ -1453,7 +1453,7 @@ void TableBrowser::jumpToRow(const sqlb::ObjectIdentifier& table, std::string co
 
     // Set filter
     ui->dataTable->filterHeader()->setFilter(static_cast<size_t>(column_index-obj->fields.begin()+1), QString("=") + value);
-    updateTable();
+    refresh();
 }
 
 static QString replaceInValue(QString value, const QString& find, const QString& replace, Qt::MatchFlags flags)
