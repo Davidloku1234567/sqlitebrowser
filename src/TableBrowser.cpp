@@ -327,7 +327,7 @@ TableBrowser::TableBrowser(DBBrowserDB* _db, QWidget* parent) :
     // Recreate the model
     if(m_model)
         delete m_model;
-    m_model = new SqliteTableModel(*db, this);
+    m_model = new SqliteTableModel(*db, this, QString(), true);
 
     // Connect slots
     connect(m_model, &SqliteTableModel::finishedFetch, this, &TableBrowser::fetchedData);
