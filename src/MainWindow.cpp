@@ -27,6 +27,7 @@
 #include "ExtendedTableWidget.h"
 #include "Data.h"
 #include "TableBrowser.h"
+#include "TableBrowserDock.h"
 
 #include <chrono>
 #include <QFile>
@@ -65,6 +66,7 @@ MainWindow::MainWindow(QWidget* parent)
       editDock(new EditDialog(this)),
       plotDock(new PlotDock(this)),
       remoteDock(new RemoteDock(this)),
+      currentTableBrowserDock(nullptr),
       findReplaceDialog(new FindReplaceDialog(this)),
       execute_sql_worker(nullptr),
       isProjectModified(false)
@@ -124,14 +126,8 @@ void MainWindow::init()
     dbStructureModel = new DbStructureModel(db, this);
     connect(&db, &DBBrowserDB::structureUpdated, this, [this]() {
         std::vector<sqlb::ObjectIdentifier> old_tables;
-        for(int i=0;i<ui->tabBrowsers->count();i++)
-        {
-            TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->widget(i));
-            if(w)
-                old_tables.push_back(w->currentlyBrowsedTableName());
-            else
-                old_tables.push_back(sqlb::ObjectIdentifier{});
-        }
+        for(const auto& t : allTableBrowserWidgets())
+            old_tables.push_back(t->currentlyBrowsedTableName());
 
         dbStructureModel->reloadData();
 
@@ -148,6 +144,7 @@ void MainWindow::init()
     ui->treeSchemaDock->setColumnHidden(DbStructureModel::ColumnSchema, true);
 
     // Create initial table browser tab
+    ui->tabBrowsers->setWindowFlags(Qt::Widget);
     newTableBrowserTab();
 
     // Create docks
@@ -541,10 +538,10 @@ bool MainWindow::fileOpen(const QString& fileName, bool openFromProject, bool re
                 }
                 if(ui->tabSqlAreas->count() == 0)
                     openSqlTab(true);
-                if(ui->mainTab->currentWidget() == ui->browser)
-                    populateTable();
                 else if(ui->mainTab->currentWidget() == ui->pragmas)
                     loadPragmas();
+
+                populateTable();
 
                 // Update remote dock
                 remoteDock->fileOpened(wFile);
@@ -610,12 +607,9 @@ void MainWindow::populateStructure(const std::vector<sqlb::ObjectIdentifier>& ol
     ui->treeSchemaDock->expandToDepth(0);
 
     // Refresh the browse data tabs
-    for(int i=0;i<ui->tabBrowsers->count()&&static_cast<size_t>(i)<old_tables.size();i++)
-    {
-        TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->widget(i));
-        if(w)
-            w->setStructure(dbStructureModel, old_tables.at(static_cast<size_t>(i)));
-    }
+    const auto all_table_browsers = allTableBrowserWidgets();
+    for(size_t i=0;i<all_table_browsers.size()&&i<old_tables.size();i++)
+        all_table_browsers.at(i)->setStructure(dbStructureModel, old_tables.at(i));
 
     // Cancel here if no database is opened
     if(!db.isOpen())
@@ -659,14 +653,18 @@ void MainWindow::populateStructure(const std::vector<sqlb::ObjectIdentifier>& ol
 
 void MainWindow::populateTable()
 {
-    // Early exit if the Browse Data tab isn't visible as there is no need to update it in this case
-    if(ui->mainTab->currentWidget() != ui->browser)
-        return;
-
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-    if(w)
-        w->updateTable();
+    for(const auto& d : allTableBrowserDocks())
+    {
+        // When in the Browse Data tab update all docks. Otherwise just update the floating ones because they might
+        // be visible even when another tab is active.
+        if(ui->mainTab->currentWidget() == ui->browser || d->isFloating())
+        {
+            TableBrowser* t = qobject_cast<TableBrowser*>(d->widget());
+            if(t)
+                t->updateTable();
+        }
+    }
     QApplication::restoreOverrideCursor();
 }
 
@@ -696,12 +694,10 @@ bool MainWindow::fileClose()
     statusReadOnlyLabel->setVisible(false);
 
     // Reset the table browser of the Browse Data tab
-    while(ui->tabBrowsers->count())
-        closeTableBrowserTab(0, true);
+    while(allTableBrowserDocks().size())
+        closeTableBrowserTab(allTableBrowserDocks().front(), true);
     newTableBrowserTab();
-    TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-    if(w)
-        w->setEnabled(false);
+    allTableBrowserWidgets().at(0)->setEnabled(false);
 
     // Clear edit dock
     editDock->setCurrentIndex(QModelIndex());
@@ -936,9 +932,11 @@ void MainWindow::editObject()
             db.setPragma("foreign_keys", foreign_keys);
         }
         if(ok) {
-            TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-            if(w)
-                w->clearFilters();
+            for(const auto& t : allTableBrowserWidgets())
+            {
+                if(t->currentlyBrowsedTableName() == name)
+                    t->clearFilters();
+            }
             populateTable();
         }
     } else if(type == "index") {
@@ -985,12 +983,8 @@ void MainWindow::toggleEditDock(bool visible)
         // fill edit dock with actual data, when the current index has changed while the dock was invisible.
         // (note that this signal is also emitted when the widget is docked or undocked, so we have to avoid
         // reloading data when the user is editing and (un)docks the editor).
-        TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-        if(w)
-        {
-            if (editDock->currentIndex() != w->currentIndex())
-                editDock->setCurrentIndex(w->currentIndex());
-        }
+        if (currentTableBrowserDock && editDock->currentIndex() != currentTableBrowserDock->currentIndex())
+            editDock->setCurrentIndex(currentTableBrowserDock->currentIndex());
     }
 }
 
@@ -1002,10 +996,7 @@ void MainWindow::doubleClickTable(const QModelIndex& index)
     }
 
     // * Don't allow editing of other objects than tables and editable views
-    bool isEditingAllowed = !db.readOnly();
-    TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-    if(w)
-        isEditingAllowed = isEditingAllowed && m_currentTabTableModel == w->model() && w->model()->isEditable(index);
+    bool isEditingAllowed = !db.readOnly() && currentTableBrowserDock && m_currentTabTableModel == currentTableBrowserDock->model() && currentTableBrowserDock->model()->isEditable(index);
 
     // Enable or disable the Apply, Null, & Import buttons in the Edit Cell
     // dock depending on the value of the "isEditingAllowed" bool above
@@ -1028,10 +1019,9 @@ void MainWindow::dataTableSelectionChanged(const QModelIndex& index)
         return;
     }
 
-    bool editingAllowed = !db.readOnly();
-    TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-    if(w)
-        editingAllowed = editingAllowed && m_currentTabTableModel == w->model() && w->model()->isEditable(index);
+    changeTableBrowserTab(qobject_cast<TableBrowser*>(index.model()->parent()));
+
+    bool editingAllowed = !db.readOnly() && currentTableBrowserDock && m_currentTabTableModel == currentTableBrowserDock->model() && currentTableBrowserDock->model()->isEditable(index);
 
     // Don't allow editing of other objects than tables and editable views
     editDock->setReadOnly(!editingAllowed);
@@ -1294,9 +1284,6 @@ void MainWindow::mainTabSelected(int /*tabindex*/)
 
     if(ui->mainTab->currentWidget() == ui->browser)
     {
-        TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-        if(w)
-            m_currentTabTableModel = w->model();
         populateTable();
     } else if(ui->mainTab->currentWidget() == ui->pragmas) {
         loadPragmas();
@@ -1797,19 +1784,14 @@ void MainWindow::activateFields(bool enable)
 
     remoteDock->enableButtons();
 
-    for(int i=0;i<ui->tabBrowsers->count();i++)
-    {
-        TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-        if(w)
-            w->setEnabled(enable);
-    }
+    for(const auto& t : allTableBrowserWidgets())
+        t->setEnabled(enable);
 }
 
 void MainWindow::resizeEvent(QResizeEvent*)
 {
-    TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-    if(w)
-        w->updateRecordsetLabel();
+    for(const auto& t : allTableBrowserWidgets())
+        t->updateRecordsetLabel();
 }
 
 void MainWindow::loadPragmas()
@@ -2152,12 +2134,8 @@ void MainWindow::reloadSettings()
     qobject_cast<Application*>(qApp)->reloadSettings();
 
     // Set data browser font
-    for(int i=0;i<ui->tabBrowsers->count();i++)
-    {
-        TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->widget(i));
-        if(w)
-            w->reloadSettings();
-    }
+    for(const auto& t : allTableBrowserWidgets())
+        t->reloadSettings();
 
     // Set max recent files
     const int newMaxRecentFiles = Settings::getValue("General", "maxRecentFiles").toInt();
@@ -2259,7 +2237,6 @@ void MainWindow::reloadSettings()
     sqlb::setIdentifierQuoting(static_cast<sqlb::escapeQuoting>(Settings::getValue("editor", "identifier_quotes").toInt()));
 
     ui->tabSqlAreas->setTabsClosable(Settings::getValue("editor", "close_button_on_tabs").toBool());
-    ui->tabBrowsers->setTabsClosable(Settings::getValue("editor", "close_button_on_tabs").toBool());
 }
 
 void MainWindow::checkNewVersion(const QString& versionstring, const QString& url)
@@ -2636,8 +2613,8 @@ bool MainWindow::loadProject(QString filename, bool readOnly)
                     }
                 } else if(xml.name() == "tab_browse") {
                     // Close all open tabs first
-                    for(int i=ui->tabBrowsers->count()-1;i>=0;i--)
-                        closeTableBrowserTab(i, true);
+                    while(allTableBrowserDocks().size())
+                        closeTableBrowserTab(allTableBrowserDocks().front(), true);
 
                     // Browse Data tab settings
                     while(xml.readNext() != QXmlStreamReader::EndElement && xml.name() != "tab_browse")
@@ -2676,17 +2653,18 @@ bool MainWindow::loadProject(QString filename, bool readOnly)
                             // New browser tab
                             sqlb::ObjectIdentifier table;
                             table.fromSerialised(xml.attributes().value("table").toString().toStdString());
-                            int tab_index = newTableBrowserTab(table);
+                            QDockWidget* dock = newTableBrowserTab(table);
 
                             QString title = xml.attributes().value("title").toString();
-                            ui->tabBrowsers->setTabText(tab_index, title);
+                            dock->setWindowTitle(title);
                             if(xml.attributes().value("custom_title").toString() == "1")
-                                ui->tabBrowsers->tabBar()->setTabData(tab_index, true);
+                                dock->setProperty("custom_title", true);
 
                             xml.skipCurrentElement();
-                        } else if(xml.name() == "current_tab") {
-                            // Currently selected tab
-                            ui->tabBrowsers->setCurrentIndex(xml.attributes().value("id").toString().toInt());
+                        } else if(xml.name() == "dock_state") {
+                            // Dock state
+                            ui->tabBrowsers->restoreState(QByteArray::fromHex(xml.attributes().value("state").toString().toUtf8()));
+
                             xml.skipCurrentElement();
                         } else if(xml.name() == "default_encoding") {
                             // Default text encoding
@@ -2976,18 +2954,17 @@ void MainWindow::saveProject(const QString& currentFilename)
         // Browse Data tab settings
         xml.writeStartElement("tab_browse");
 
-        for(int i=0;i<ui->tabBrowsers->count();i++)
+        for(const auto d : allTableBrowserDocks())
         {
-            TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->widget(i));
             xml.writeStartElement("table");
-            xml.writeAttribute("title", ui->tabBrowsers->tabText(i));
-            xml.writeAttribute("custom_title", ui->tabBrowsers->tabBar()->tabData(i).toBool() ? "1" : "0");
-            xml.writeAttribute("table", QString::fromStdString(w->currentlyBrowsedTableName().toSerialised()));
+            xml.writeAttribute("title", d->windowTitle());
+            xml.writeAttribute("custom_title", d->property("custom_title").toBool() ? "1" : "0");
+            xml.writeAttribute("table", QString::fromStdString(qobject_cast<TableBrowser*>(d->widget())->currentlyBrowsedTableName().toSerialised()));
             xml.writeEndElement();
         }
 
-        xml.writeStartElement("current_tab");                                           // Currently selected tab
-        xml.writeAttribute("id", QString::number(ui->tabBrowsers->currentIndex()));
+        xml.writeStartElement("dock_state");
+        xml.writeAttribute("state", ui->tabBrowsers->saveState().toHex());
         xml.writeEndElement();
 
         xml.writeStartElement("default_encoding");  // Default encoding for text stored in tables
@@ -3586,34 +3563,36 @@ void MainWindow::clearRecentFiles()
 
 sqlb::ObjectIdentifier MainWindow::currentlyBrowsedTableName() const
 {
-    TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->currentWidget());
-
-    if(w)
-        return w->currentlyBrowsedTableName();
+    if(currentTableBrowserDock)
+        return currentTableBrowserDock->currentlyBrowsedTableName();
     else
         return sqlb::ObjectIdentifier{};
 }
 
-void MainWindow::closeTableBrowserTab(int index, bool force)
+void MainWindow::closeTableBrowserTab(TableBrowserDock* dock, bool force)
 {
-    // Remove the tab and delete the widget
-    QWidget* w = ui->tabBrowsers->widget(index);
-    ui->tabBrowsers->removeTab(index);
-    delete w;
+    delete dock;
 
-    // Don't let an empty tab widget
-    if(ui->tabBrowsers->count() == 0 && !force)
+    if(allTableBrowserDocks().size() == 0 && !force)
         newTableBrowserTab();
 }
 
-int MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& tableToBrowse)
+TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& tableToBrowse)
 {
+    static unsigned int counter = 0;
+
+    // Prepare new dock
+    TableBrowserDock* d = new TableBrowserDock(ui->tabBrowsers, this);
+    d->setContextMenuPolicy(Qt::CustomContextMenu);
+    d->setObjectName("dock" + QString::number(++counter));
+    connect(d, &TableBrowserDock::customContextMenuRequested, this, &MainWindow::showContextMenuTableBrowserTabBar);
+
     // Create and initialise widget
     TableBrowser* w = new TableBrowser(&db, this);
-    connect(w, &TableBrowser::currentTableChanged, [this, w](const sqlb::ObjectIdentifier& table) {
+    connect(w, &TableBrowser::currentTableChanged, [d](const sqlb::ObjectIdentifier& table) {
         // Only update tab name when no custom name was set
-        if(!ui->tabBrowsers->tabBar()->tabData(ui->tabBrowsers->indexOf(w)).toBool())
-            ui->tabBrowsers->setTabText(ui->tabBrowsers->indexOf(w), QString::fromStdString(table.toDisplayString()));
+        if(!d->property("custom_title").toBool())
+            d->setWindowTitle(QString::fromStdString(table.toDisplayString()));
     });
     w->setStructure(dbStructureModel, tableToBrowse);
     w->setEnabled(ui->fileCloseAction->isEnabled());
@@ -3641,69 +3620,83 @@ int MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& tableToBrowse)
     // Set current model
     m_currentTabTableModel = w->model();
 
-    // Create new tab, add it to the tab widget and select it
-    int index = ui->tabBrowsers->addTab(w, QIcon(":icons/table"), QString());
-    ui->tabBrowsers->setCurrentIndex(index);
+    // Update view
+    w->updateTable();
 
-    return index;
+    // Set up dock and add it to the tab
+    d->setWidget(w);
+    ui->tabBrowsers->addDockWidget(Qt::LeftDockWidgetArea, d);
+
+    return d;
 }
 
-void MainWindow::changeTableBrowserTab(int index)
+void MainWindow::changeTableBrowserTab(TableBrowser* browser)
 {
-    TableBrowser* w = qobject_cast<TableBrowser*>(ui->tabBrowsers->widget(index));
-    if(w)
-    {
-        m_currentTabTableModel = w->model();
-        w->updateTable();
-    }
+    currentTableBrowserDock = browser;
+
+    if(browser && browser->model() != m_currentTabTableModel)
+        m_currentTabTableModel = browser->model();
 }
 
-void MainWindow::renameTableBrowserTab(int index)
+void MainWindow::renameTableBrowserTab(TableBrowserDock* dock)
 {
     QString new_name = QInputDialog::getText(this,
                                              qApp->applicationName(),
                                              tr("Set a new name for the Browse Data tab. Use the '&&' character to allow using the following character as a keyboard shortcut."),
                                              QLineEdit::EchoMode::Normal,
-                                             ui->tabBrowsers->tabText(index));
+                                             dock->windowTitle());
 
     if(!new_name.isNull())      // Don't do anything if the Cancel button was clicked
     {
-        ui->tabBrowsers->setTabText(index, new_name);
-        ui->tabBrowsers->tabBar()->setTabData(index, true);     // Custom name
+        dock->setWindowTitle(new_name);
+        dock->setProperty("custom_title", true);
     }
 }
 
 void MainWindow::showContextMenuTableBrowserTabBar(const QPoint& pos)
 {
-    // Don't show context menu if the mouse click was outside of all the tabs
-    int tab = ui->tabBrowsers->tabBar()->tabAt(pos);
-    if(tab == -1)
+    // Get dock widget
+    TableBrowserDock* dock = qobject_cast<TableBrowserDock*>(sender());
+    if(dock == nullptr)
         return;
 
     // Prepare all menu actions
-    QAction* actionNewTab = new QAction(this);
-    actionNewTab->setText(tr("New Tab"));
-    connect(actionNewTab, &QAction::triggered, [this]() {
+    QAction* actionNewDock = new QAction(this);
+    actionNewDock->setText(tr("New Dock"));
+    connect(actionNewDock, &QAction::triggered, [this]() {
         newTableBrowserTab();
     });
 
     QAction* actionRename = new QAction(this);
-    actionRename->setText(tr("Rename Tab"));
-    connect(actionRename, &QAction::triggered, [this, tab]() {
-        renameTableBrowserTab(tab);
+    actionRename->setText(tr("Rename Dock"));
+    connect(actionRename, &QAction::triggered, [this, dock]() {
+        renameTableBrowserTab(dock);
     });
 
     QAction* actionClose = new QAction(this);
-    actionClose->setText(tr("Close Tab"));
+    actionClose->setText(tr("Close Dock"));
     actionClose->setShortcut(tr("Ctrl+W"));
-    connect(actionClose, &QAction::triggered, [this, tab]() {
-        closeTableBrowserTab(tab);
+    connect(actionClose, &QAction::triggered, [this, dock]() {
+        closeTableBrowserTab(dock);
     });
 
     // Show menu
     QMenu* menuTabs = new QMenu(this);
-    menuTabs->addAction(actionNewTab);
+    menuTabs->addAction(actionNewDock);
     menuTabs->addAction(actionRename);
     menuTabs->addAction(actionClose);
-    menuTabs->exec(ui->tabBrowsers->mapToGlobal(pos));
+    menuTabs->exec(dock->mapToGlobal(pos));
+}
+
+QList<TableBrowserDock*> MainWindow::allTableBrowserDocks() const
+{
+    return ui->tabBrowsers->findChildren<TableBrowserDock*>();
+}
+
+std::vector<TableBrowser*> MainWindow::allTableBrowserWidgets() const
+{
+    std::vector<TableBrowser*> widgets;
+    for(const auto& d : allTableBrowserDocks())
+        widgets.push_back(qobject_cast<TableBrowser*>(d->widget()));
+    return widgets;
 }
