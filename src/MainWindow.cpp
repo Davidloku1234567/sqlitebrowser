@@ -2224,8 +2224,12 @@ void MainWindow::reloadSettings()
     db.loadExtensionsFromSettings();
 
     // Refresh view
+    db.structureUpdated();
+    std::vector<sqlb::ObjectIdentifier> old_tables;
+    for(const auto& t : allTableBrowserWidgets())
+        old_tables.push_back(t->currentlyBrowsedTableName());
     dbStructureModel->reloadData();
-    populateStructure();
+    populateStructure(old_tables);
     refreshTableBrowsers();
 
     // Hide or show the remote dock as needed
