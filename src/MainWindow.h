@@ -220,7 +220,7 @@ private slots:
     void showContextMenuSqlTabBar(const QPoint& pos);
 
     TableBrowserDock* newTableBrowserTab(const sqlb::ObjectIdentifier& tableToBrowse = {});
-    void closeTableBrowserTab(TableBrowserDock* dock, bool force = false);
+    void tableBrowserTabClosed();
     void changeTableBrowserTab(TableBrowser* browser);
     void renameTableBrowserTab(TableBrowserDock* dock);
     void showContextMenuTableBrowserTabBar(const QPoint& pos);

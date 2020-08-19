@@ -13,7 +13,7 @@ public:
     explicit TableBrowserDock(QWidget* parent, MainWindow* mainWindow);
 
 signals:
-    void activated();
+    void closed();
 
 protected:
     void closeEvent(QCloseEvent*) override;

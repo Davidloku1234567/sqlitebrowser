@@ -694,8 +694,8 @@ bool MainWindow::fileClose()
     statusReadOnlyLabel->setVisible(false);
 
     // Reset the table browser of the Browse Data tab
-    while(allTableBrowserDocks().size())
-        closeTableBrowserTab(allTableBrowserDocks().front(), true);
+    for(auto d : allTableBrowserDocks())
+        d->close();
     newTableBrowserTab();
     allTableBrowserWidgets().at(0)->setEnabled(false);
 
@@ -2613,8 +2613,8 @@ bool MainWindow::loadProject(QString filename, bool readOnly)
                     }
                 } else if(xml.name() == "tab_browse") {
                     // Close all open tabs first
-                    while(allTableBrowserDocks().size())
-                        closeTableBrowserTab(allTableBrowserDocks().front(), true);
+                    for(auto d : allTableBrowserDocks())
+                        d->close();
 
                     // Browse Data tab settings
                     while(xml.readNext() != QXmlStreamReader::EndElement && xml.name() != "tab_browse")
@@ -3569,11 +3569,12 @@ sqlb::ObjectIdentifier MainWindow::currentlyBrowsedTableName() const
         return sqlb::ObjectIdentifier{};
 }
 
-void MainWindow::closeTableBrowserTab(TableBrowserDock* dock, bool force)
+void MainWindow::tableBrowserTabClosed()
 {
-    delete dock;
-
-    if(allTableBrowserDocks().size() == 0 && !force)
+    // The closed() signal is emitted before the dock is destroyed. Since we
+    // always want to have at least one dock open we need to check if this is
+    // the last dock which is closed instead of if there is no dock remaining.
+    if(allTableBrowserDocks().size() == 1)
         newTableBrowserTab();
 }
 
@@ -3586,6 +3587,7 @@ TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& t
     d->setContextMenuPolicy(Qt::CustomContextMenu);
     d->setObjectName("dock" + QString::number(++counter));
     connect(d, &TableBrowserDock::customContextMenuRequested, this, &MainWindow::showContextMenuTableBrowserTabBar);
+    connect(d, &TableBrowserDock::closed, this, &MainWindow::tableBrowserTabClosed);
 
     // Create and initialise widget
     TableBrowser* w = new TableBrowser(&db, this);
@@ -3679,8 +3681,8 @@ void MainWindow::showContextMenuTableBrowserTabBar(const QPoint& pos)
     QAction* actionClose = new QAction(this);
     actionClose->setText(tr("Close Dock"));
     actionClose->setShortcut(tr("Ctrl+W"));
-    connect(actionClose, &QAction::triggered, [this, dock]() {
-        closeTableBrowserTab(dock);
+    connect(actionClose, &QAction::triggered, [dock]() {
+        dock->deleteLater();
     });
 
     // Show menu
