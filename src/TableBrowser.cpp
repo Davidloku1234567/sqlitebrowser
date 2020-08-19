@@ -143,6 +143,15 @@ TableBrowser::TableBrowser(DBBrowserDB* _db, QWidget* parent) :
     connect(ui->dataTable, &ExtendedTableWidget::openFileFromDropEvent, this, &TableBrowser::requestFileOpen);
     connect(ui->dataTable, &ExtendedTableWidget::selectedRowsToBeDeleted, this, &TableBrowser::deleteRecord);
 
+    connect(ui->dataTable, &ExtendedTableWidget::foreignKeyClicked, [this](const sqlb::ObjectIdentifier& table, const std::string& column, const QByteArray& value) {
+        // Just select the column that was just clicked instead of selecting an entire range which
+        // happens because of the Ctrl and Shift keys.
+        ui->dataTable->selectionModel()->select(ui->dataTable->currentIndex(), QItemSelectionModel::ClearAndSelect);
+
+        // Emit the foreign key clicked signal
+        emit foreignKeyClicked(table, column, value);
+    });
+
     connect(ui->actionRefresh, &QAction::triggered, this, [this]() {
         db->updateSchema();
         refresh();
@@ -1452,7 +1461,7 @@ void TableBrowser::jumpToRow(const sqlb::ObjectIdentifier& table, std::string co
     setCurrentTable(table);
 
     // Set filter
-    ui->dataTable->filterHeader()->setFilter(static_cast<size_t>(column_index-obj->fields.begin()+1), QString("=") + value);
+    m_settings[table].filterValues[static_cast<size_t>(column_index-obj->fields.begin()+1)] = value;
     refresh();
 }
 

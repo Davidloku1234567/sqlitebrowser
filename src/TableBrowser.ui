@@ -1049,7 +1049,6 @@
    <extends>QTableWidget</extends>
    <header>ExtendedTableWidget.h</header>
    <slots>
-    <signal>foreignKeyClicked(QString,QString,QByteArray)</signal>
     <signal>foreignKeyClicked(sqlb::ObjectIdentifier,QString,QByteArray)</signal>
    </slots>
   </customwidget>
@@ -1194,22 +1193,6 @@
     </hint>
     <hint type="destinationlabel">
      <x>499</x>
-     <y>314</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>dataTable</sender>
-   <signal>foreignKeyClicked(sqlb::ObjectIdentifier,std::string,QByteArray)</signal>
-   <receiver>TableBrowser</receiver>
-   <slot>jumpToRow(sqlb::ObjectIdentifier,std::string,QByteArray)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>70</x>
-     <y>242</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>518</x>
      <y>314</y>
     </hint>
    </hints>
@@ -1431,7 +1414,6 @@
   <slot>navigateBegin()</slot>
   <slot>navigateEnd()</slot>
   <slot>navigateGoto()</slot>
-  <slot>jumpToRow(sqlb::ObjectIdentifier,std::string,QByteArray)</slot>
   <slot>showRowidColumn(bool)</slot>
   <slot>unlockViewEditing(bool)</slot>
   <slot>editDisplayFormat()</slot>

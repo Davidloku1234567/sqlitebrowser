@@ -3635,6 +3635,10 @@ TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& t
     connect(w, &TableBrowser::statusMessageRequested, ui->statusbar, [this](const QString& message) {
         ui->statusbar->showMessage(message);
     });
+    connect(w, &TableBrowser::foreignKeyClicked, [this](const sqlb::ObjectIdentifier& table, std::string column, const QByteArray& value) {
+        TableBrowserDock* foreign_key_dock = newTableBrowserTab(table);
+        qobject_cast<TableBrowser*>(foreign_key_dock->widget())->jumpToRow(table, column, value);
+    });
     connect(w->model(), &SqliteTableModel::finishedFetch, [this, w](){
         auto& settings = w->settings(w->currentlyBrowsedTableName());
         plotDock->updatePlot(w->model(), &settings, true, false);

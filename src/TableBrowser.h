@@ -92,6 +92,7 @@ signals:
     void createView(std::string sql);
     void requestFileOpen(QString file);
     void currentTableChanged(sqlb::ObjectIdentifier table);
+    void foreignKeyClicked(sqlb::ObjectIdentifier table, std::string column, QByteArray value);
 
 private slots:
     void clear();
