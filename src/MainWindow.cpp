@@ -3642,6 +3642,8 @@ TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& t
     // Set up dock and add it to the tab
     d->setWidget(w);
     ui->tabBrowsers->addDockWidget(Qt::TopDockWidgetArea, d);
+    if(allTableBrowserDocks().size() > 1)
+        ui->tabBrowsers->tabifyDockWidget(allTableBrowserDocks().front(), d);
 
     // Set current model and browser
     allTableBrowserDocks().front()->activateWindow();
