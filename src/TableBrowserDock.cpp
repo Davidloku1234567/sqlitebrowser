@@ -15,3 +15,12 @@ void TableBrowserDock::closeEvent(QCloseEvent*)
 {
     emit closed();
 }
+
+void TableBrowserDock::setFocusStyle(bool on)
+{
+    // Highlight title bar when dock widget is active
+    if(on)
+        setStyleSheet("QDockWidget::title {background:palette(highlight);}");
+    else
+        setStyleSheet(QString());
+}

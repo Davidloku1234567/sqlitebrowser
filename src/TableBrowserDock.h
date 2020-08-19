@@ -11,12 +11,13 @@ class TableBrowserDock : public QDockWidget
 
 public:
     explicit TableBrowserDock(QWidget* parent, MainWindow* mainWindow);
+    void setFocusStyle(bool on);
 
 signals:
     void closed();
 
 protected:
-    void closeEvent(QCloseEvent*) override;
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     MainWindow* main_window;

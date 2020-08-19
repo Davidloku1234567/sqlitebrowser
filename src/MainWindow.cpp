@@ -3628,16 +3628,16 @@ TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& t
         plotDock->updatePlot(w->model(), &settings, true, false);
     });
 
-    // Set current model and browser
-    allTableBrowserDocks().front()->activateWindow();
-    changeTableBrowserTab(w);
-
     // Update view
     w->refresh();
 
     // Set up dock and add it to the tab
     d->setWidget(w);
     ui->tabBrowsers->addDockWidget(Qt::LeftDockWidgetArea, d);
+
+    // Set current model and browser
+    allTableBrowserDocks().front()->activateWindow();
+    changeTableBrowserTab(w);
 
     return d;
 }
@@ -3648,6 +3648,11 @@ void MainWindow::changeTableBrowserTab(TableBrowser* browser)
 
     if(browser && browser->model() != m_currentTabTableModel)
     {
+        // Make sure only the title of the active dock is highlighted
+        for(auto d : allTableBrowserDocks())
+            d->setFocusStyle(false);
+        qobject_cast<TableBrowserDock*>(browser->parent())->setFocusStyle(true);
+
         m_currentTabTableModel = browser->model();
         plotDock->updatePlot(m_currentTabTableModel, &browser->settings(browser->currentlyBrowsedTableName()), true, false);
     }
