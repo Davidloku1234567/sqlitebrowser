@@ -3690,7 +3690,6 @@ void MainWindow::showContextMenuTableBrowserTabBar(const QPoint& pos)
 
     QAction* actionClose = new QAction(this);
     actionClose->setText(tr("Close Dock"));
-    actionClose->setShortcut(tr("Ctrl+W"));
     connect(actionClose, &QAction::triggered, [dock]() {
         dock->deleteLater();
     });
