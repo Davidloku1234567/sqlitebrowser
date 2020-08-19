@@ -145,6 +145,7 @@ void MainWindow::init()
 
     // Create initial table browser tab
     ui->tabBrowsers->setWindowFlags(Qt::Widget);
+    ui->tabBrowsers->setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
     newTableBrowserTab();
 
     // Create docks
@@ -3640,7 +3641,7 @@ TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& t
 
     // Set up dock and add it to the tab
     d->setWidget(w);
-    ui->tabBrowsers->addDockWidget(Qt::LeftDockWidgetArea, d);
+    ui->tabBrowsers->addDockWidget(Qt::TopDockWidgetArea, d);
 
     // Set current model and browser
     allTableBrowserDocks().front()->activateWindow();
