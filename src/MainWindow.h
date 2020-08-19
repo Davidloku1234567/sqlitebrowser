@@ -93,7 +93,7 @@ private:
     EditDialog* editDock;
     PlotDock* plotDock;
     RemoteDock* remoteDock;
-    TableBrowser* currentTableBrowserDock;
+    TableBrowser* currentTableBrowser;
     FindReplaceDialog* findReplaceDialog;
 
     std::unique_ptr<RunSql> execute_sql_worker;

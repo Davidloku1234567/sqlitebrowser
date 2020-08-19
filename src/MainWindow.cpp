@@ -66,7 +66,7 @@ MainWindow::MainWindow(QWidget* parent)
       editDock(new EditDialog(this)),
       plotDock(new PlotDock(this)),
       remoteDock(new RemoteDock(this)),
-      currentTableBrowserDock(nullptr),
+      currentTableBrowser(nullptr),
       findReplaceDialog(new FindReplaceDialog(this)),
       execute_sql_worker(nullptr),
       isProjectModified(false)
@@ -983,8 +983,8 @@ void MainWindow::toggleEditDock(bool visible)
         // fill edit dock with actual data, when the current index has changed while the dock was invisible.
         // (note that this signal is also emitted when the widget is docked or undocked, so we have to avoid
         // reloading data when the user is editing and (un)docks the editor).
-        if (currentTableBrowserDock && editDock->currentIndex() != currentTableBrowserDock->currentIndex())
-            editDock->setCurrentIndex(currentTableBrowserDock->currentIndex());
+        if (currentTableBrowser && editDock->currentIndex() != currentTableBrowser->currentIndex())
+            editDock->setCurrentIndex(currentTableBrowser->currentIndex());
     }
 }
 
@@ -996,7 +996,7 @@ void MainWindow::doubleClickTable(const QModelIndex& index)
     }
 
     // * Don't allow editing of other objects than tables and editable views
-    bool isEditingAllowed = !db.readOnly() && currentTableBrowserDock && m_currentTabTableModel == currentTableBrowserDock->model() && currentTableBrowserDock->model()->isEditable(index);
+    bool isEditingAllowed = !db.readOnly() && currentTableBrowser && m_currentTabTableModel == currentTableBrowser->model() && currentTableBrowser->model()->isEditable(index);
 
     // Enable or disable the Apply, Null, & Import buttons in the Edit Cell
     // dock depending on the value of the "isEditingAllowed" bool above
@@ -1021,7 +1021,7 @@ void MainWindow::dataTableSelectionChanged(const QModelIndex& index)
 
     changeTableBrowserTab(qobject_cast<TableBrowser*>(index.model()->parent()));
 
-    bool editingAllowed = !db.readOnly() && currentTableBrowserDock && m_currentTabTableModel == currentTableBrowserDock->model() && currentTableBrowserDock->model()->isEditable(index);
+    bool editingAllowed = !db.readOnly() && currentTableBrowser && m_currentTabTableModel == currentTableBrowser->model() && currentTableBrowser->model()->isEditable(index);
 
     // Don't allow editing of other objects than tables and editable views
     editDock->setReadOnly(!editingAllowed);
@@ -3563,8 +3563,8 @@ void MainWindow::clearRecentFiles()
 
 sqlb::ObjectIdentifier MainWindow::currentlyBrowsedTableName() const
 {
-    if(currentTableBrowserDock)
-        return currentTableBrowserDock->currentlyBrowsedTableName();
+    if(currentTableBrowser)
+        return currentTableBrowser->currentlyBrowsedTableName();
     else
         return sqlb::ObjectIdentifier{};
 }
@@ -3575,7 +3575,16 @@ void MainWindow::tableBrowserTabClosed()
     // always want to have at least one dock open we need to check if this is
     // the last dock which is closed instead of if there is no dock remaining.
     if(allTableBrowserDocks().size() == 1)
+    {
         newTableBrowserTab();
+    } else {
+        // If the currently active tab is closed activate another tab
+        if(currentTableBrowser && sender() == currentTableBrowser->parent())
+        {
+            allTableBrowserDocks().front()->activateWindow();
+            changeTableBrowserTab(allTableBrowserWidgets().front());
+        }
+    }
 }
 
 TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& tableToBrowse)
@@ -3619,8 +3628,9 @@ TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& t
         plotDock->updatePlot(w->model(), &settings, true, false);
     });
 
-    // Set current model
-    m_currentTabTableModel = w->model();
+    // Set current model and browser
+    allTableBrowserDocks().front()->activateWindow();
+    changeTableBrowserTab(w);
 
     // Update view
     w->refresh();
@@ -3634,7 +3644,7 @@ TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& t
 
 void MainWindow::changeTableBrowserTab(TableBrowser* browser)
 {
-    currentTableBrowserDock = browser;
+    currentTableBrowser = browser;
 
     if(browser && browser->model() != m_currentTabTableModel)
     {
