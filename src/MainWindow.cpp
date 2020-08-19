@@ -693,9 +693,11 @@ bool MainWindow::fileClose()
     statusEncryptionLabel->setVisible(false);
     statusReadOnlyLabel->setVisible(false);
 
-    // Reset the table browser of the Browse Data tab
+    // Reset the table browser of the Browse Data tab.
+    // We call delete here to avoid the closed() signal being emitted
+    // which would open a new dock.
     for(auto d : allTableBrowserDocks())
-        d->close();
+        delete d;
     newTableBrowserTab();
     allTableBrowserWidgets().at(0)->setEnabled(false);
 
@@ -2612,9 +2614,10 @@ bool MainWindow::loadProject(QString filename, bool readOnly)
                         }
                     }
                 } else if(xml.name() == "tab_browse") {
-                    // Close all open tabs first
+                    // Close all open tabs first. We call delete here to avoid the
+                    // closed() signal being emitted which would open a new dock.
                     for(auto d : allTableBrowserDocks())
-                        d->close();
+                        delete d;
 
                     // Browse Data tab settings
                     while(xml.readNext() != QXmlStreamReader::EndElement && xml.name() != "tab_browse")
@@ -2654,9 +2657,12 @@ bool MainWindow::loadProject(QString filename, bool readOnly)
                             sqlb::ObjectIdentifier table;
                             table.fromSerialised(xml.attributes().value("table").toString().toStdString());
                             QDockWidget* dock = newTableBrowserTab(table);
+                            dock->setWindowTitle(xml.attributes().value("title").toString());
 
-                            QString title = xml.attributes().value("title").toString();
-                            dock->setWindowTitle(title);
+                            unsigned int dock_id = xml.attributes().value("dock_id").toUInt();
+                            if(dock_id)
+                                dock->setObjectName("dockBrowse" + QString::number(dock_id));
+
                             if(xml.attributes().value("custom_title").toString() == "1")
                                 dock->setProperty("custom_title", true);
 
@@ -2959,6 +2965,7 @@ void MainWindow::saveProject(const QString& currentFilename)
             xml.writeStartElement("table");
             xml.writeAttribute("title", d->windowTitle());
             xml.writeAttribute("custom_title", d->property("custom_title").toBool() ? "1" : "0");
+            xml.writeAttribute("dock_id", d->objectName().mid(10)); // 10 is the length of "dockBrowse"
             xml.writeAttribute("table", QString::fromStdString(qobject_cast<TableBrowser*>(d->widget())->currentlyBrowsedTableName().toSerialised()));
             xml.writeEndElement();
         }
@@ -3594,7 +3601,7 @@ TableBrowserDock* MainWindow::newTableBrowserTab(const sqlb::ObjectIdentifier& t
     // Prepare new dock
     TableBrowserDock* d = new TableBrowserDock(ui->tabBrowsers, this);
     d->setContextMenuPolicy(Qt::CustomContextMenu);
-    d->setObjectName("dock" + QString::number(++counter));
+    d->setObjectName("dockBrowse" + QString::number(++counter));
     connect(d, &TableBrowserDock::customContextMenuRequested, this, &MainWindow::showContextMenuTableBrowserTabBar);
     connect(d, &TableBrowserDock::closed, this, &MainWindow::tableBrowserTabClosed);
 
