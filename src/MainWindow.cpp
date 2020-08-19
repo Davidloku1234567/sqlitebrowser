@@ -3662,7 +3662,7 @@ void MainWindow::renameTableBrowserTab(TableBrowserDock* dock)
 {
     QString new_name = QInputDialog::getText(this,
                                              qApp->applicationName(),
-                                             tr("Set a new name for the Browse Data tab. Use the '&&' character to allow using the following character as a keyboard shortcut."),
+                                             tr("Set a new name for the data browser. Use the '&&' character to allow using the following character as a keyboard shortcut."),
                                              QLineEdit::EchoMode::Normal,
                                              dock->windowTitle());
 
@@ -3682,19 +3682,19 @@ void MainWindow::showContextMenuTableBrowserTabBar(const QPoint& pos)
 
     // Prepare all menu actions
     QAction* actionNewDock = new QAction(this);
-    actionNewDock->setText(tr("New Dock"));
+    actionNewDock->setText(tr("New Data Browser"));
     connect(actionNewDock, &QAction::triggered, [this]() {
         newTableBrowserTab();
     });
 
     QAction* actionRename = new QAction(this);
-    actionRename->setText(tr("Rename Dock"));
+    actionRename->setText(tr("Rename Data Browser"));
     connect(actionRename, &QAction::triggered, [this, dock]() {
         renameTableBrowserTab(dock);
     });
 
     QAction* actionClose = new QAction(this);
-    actionClose->setText(tr("Close Dock"));
+    actionClose->setText(tr("Close Data Browser"));
     connect(actionClose, &QAction::triggered, [dock]() {
         dock->deleteLater();
     });
